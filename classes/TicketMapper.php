@@ -10,7 +10,7 @@ class TicketMapper {
 		
 		$stmt = $this->pdo->prepare('SELECT * FROM tickets');
 		
-		if ($_GET['name']) {
+		if (isset($_GET['name']) && $_GET['name'] ) {
 			$stmt = $this->pdo->prepare('SELECT * FROM tickets WHERE name = :name');
 			$stmt->bindParam(':name', $_GET['name']);
 		}
