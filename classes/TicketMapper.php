@@ -2,11 +2,21 @@
 
 class TicketMapper {
 
-	function __construct($pdo) {
-		$this->pdo = $pdo;
+	function __construct($db) {
+		$this->db = $db;
+		$this->params = [
+			'error'                 => false, 
+	        'status_code'           => 200, 
+	        'msg'                   => '',
+	        'form_errors'           => null,
+	        'results'               => [],
+	        'results_count'         => 0,
+	        'is_logged'             => true,
+	        'forced_login'          => false
+		];
 	}
 
-	function index() {
+	function index2() {
 		$params = [];
 		$q = 'SELECT * FROM tickets WHERE 1';
 
@@ -39,12 +49,56 @@ class TicketMapper {
 		return $tickets;
 	}
 
+	public function index($request) {
+
+		$selectStatement = $this->db->select()->from('tickets');
+		// $stmt = $this->db->query("SELECT * FROM tickets");
+		// $mem = memory_get_usage();
+		// while($row = $stmt->fetch());
+		// echo "Memory used: ".round((memory_get_usage() - $mem) / 1024 / 1024, 2)."M\n";
+		// echo "Memory used: ".memory_get_usage();
+
+		// exit('<br/>');
+
+	    $id = $request->getQueryParam('id');
+	    $name = $request->getQueryParam('name');
+	    
+	    if( $id ) {
+	        $selectStatement->where('id', '=', $id);
+	    }
+
+	    if( $name ) {
+	        $selectStatement->whereLike('name', "$name%");
+	    }
+
+	    $selectStatement->limit(1,0);
+
+	    $stmt = $selectStatement->execute();
+	    $tickets = $stmt->fetchAll();
+
+	    if ( !$tickets ) {
+	    	return $this->params;
+	    }
+
+	    // SETUP RESULTS
+	    $this->params['results'] = $tickets;
+        $this->params['results_count'] =count($tickets);
+	    return $this->params;
+	}
+
 	function show($id) {
-		$stmt = $this->pdo->prepare('SELECT * FROM tickets WHERE id = :id');
-		$stmt->execute(['id' => $id]);
-		$ticket = $stmt->fetchObject();
-		// return json_encode($ticket);
-		return $ticket;
+		$selectStatement = $this->db->select()->from('tickets')->where('id', '=', $id);
+		$stmt = $selectStatement->execute();
+		$ticket = $stmt->fetch();
+
+		if ( !$ticket ) {
+			return $this->params;
+		}
+
+		// SETUP RESULTS
+        $this->params['results'] = $ticket;
+        $this->params['results_count'] = 1;
+		return  $this->params;
 	}
 
 	function store() {

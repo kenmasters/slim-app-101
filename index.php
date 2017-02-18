@@ -24,41 +24,76 @@ $container['logger'] = function($container) {
     return $logger;
 };
 
-
-$container['db'] = function ($container) {
+// This connection is using default PHP PDO
+$container['DB'] = function ($container) {
     $db = $container['settings']['db'];
     $pdo = new PDO("mysql:host=" . $db['host'] . ";dbname=" . $db['dbname'], $db['user'], $db['pass']);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, FALSE);
     return $pdo;
 };
 
-
-$container['DB'] = function ($container) {
+// This connection is using Slim/PDO package
+$container['db'] = function ($container) {
     $db = $container['settings']['db'];
     $dsn = "mysql:host={$db['host']};dbname={$db['dbname']};charset=utf8";
     $usr = $db['user'];
     $pwd = $db['pass'];
     $pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
+    $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, TRUE);
     return $pdo;
 };
 
 
 
-/* APPLICATION ROUTE/ENDPOINTS */
-$app->get('/hello/{name}', function (Request $request, Response $response) {
+/** 
+==========================================
+APPLICATION ROUTE/ENDPOINTS
+==========================================
+*/
+
+// API Main ROUTES/ENDPOINTS
+$app->group('/api', function() {
+
+    $this->group('/v1', function() {
+
+        $this->group('/users', function() {
+            $this->get('/', function(Request $request, Response $response) {
+                exit('User routes');
+            });
+            $this->get('/{id}/', function(Request $request, Response $response) {
+                exit('User of id: ' . $request->getAttribute('id'));
+            });
+        });
+
+        $this->group('/events', function() {
+            $this->get('/', function(Request $request, Response $response) {
+                exit('Events routes');
+            });
+            $this->get('/{id}/', function(Request $request, Response $response) {
+                exit('Event of id: ' . $request->getAttribute('id'));
+            });
+        });
+
+    });
+
+});
+
+
+$app->get('/hello/{name}/', function (Request $request, Response $response) {
     $name = $request->getAttribute('name');
     $response->getBody()->write("Hello, $name");
     return $response;
 });
 
 $app->get('/', function ($request, $response, $args) {
-	$this->logger->addInfo("Something interesting happened");
-    return $response->write("Silence is a woman's best garment. (anonymous)");
+	$this->logger->addInfo("Welcome! May Slim be with you.");
+    return $response->write("<h1><pre>Silence is a woman's best garment. (anonymous)</pre></h1>");
 });
 
 
-$app->get('/docs', function(Request $request, Response $response) {
+$app->get('/docs/', function(Request $request, Response $response) {
     echo '<h3>This docs is for testing Slim Framework API</h3>';
     echo "<pre>";   
 
@@ -80,8 +115,8 @@ $app->get('/docs', function(Request $request, Response $response) {
     return '';
 });
 
-$app->get('/slim-pdo', function (Request $request, Response $response) {
-    // SELECT * FROM users WHERE id = ?
+$app->get('/slim-pdo/', function (Request $request, Response $response) {
+   
     $selectStatement = $this->DB->select()->from('tickets');
 
     $id = $request->getQueryParam('id');
@@ -101,23 +136,32 @@ $app->get('/slim-pdo', function (Request $request, Response $response) {
     return $response->withJson($data);
 });
 
+
+
 $app->group('/tickets', function(){
 
-    $this->get('', function(Request $request, Response $response){
+    $this->get('/fdaczczc', function(Request $request, Response $response){
         $this->logger->addInfo("Ticket list");
         $mapper = new TicketMapper($this->db);
         $tickets = $mapper->index();
         return $response->withJson($tickets);
     });
 
+    $this->get('/', function(Request $request, Response $response){
+        $this->logger->addInfo("Ticket list");
+        $mapper = new TicketMapper($this->db);
+        $tickets = $mapper->index($request);
+        return $response->withJson($tickets);
+    });
+
     // Add a new ticket
-    $this->post('', function ($request, $response) {
+    $this->post('/', function ($request, $response) {
        $input = $request->getParsedBody();
        echo $input['name'];
     });
     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
 
-    $this->get('/{id}', function(Request $request, Response $response){
+    $this->get('/{id}/', function(Request $request, Response $response){
         $this->logger->addInfo("Ticket Info");
         $mapper = new TicketMapper($this->db);
         $ticket = $mapper->show($request->getAttribute('id'));
@@ -125,7 +169,7 @@ $app->group('/tickets', function(){
     });
 
     // DELETE a todo with given id
-    $this->delete('/{id}', function ($request, $response, $args) {
+    $this->delete('/{id}/', function ($request, $response, $args) {
         $sth = $this->db->prepare("DELETE FROM tickets WHERE id=:id");
         $sth->bindParam("id", $args['id']);
         $sth->execute();
@@ -134,7 +178,7 @@ $app->group('/tickets', function(){
     });
     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
     // Update todo with given id
-    $this->put('/{id}', function ($request, $response, $args) {
+    $this->put('/{id}/', function ($request, $response, $args) {
         $input = $request->getParsedBody();
         $sql = "UPDATE tickets SET name=:name WHERE id=:id";
         $sth = $this->db->prepare($sql);
@@ -146,6 +190,8 @@ $app->group('/tickets', function(){
     });
     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
 });
+
+
 
 
 /* RUN THE APPLICATION */ 
