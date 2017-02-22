@@ -11,3 +11,5 @@ RewriteRule ^(.*[^/])$ /$1/ [R=301,L]
 
 # To redirect all request to index.php
 RewriteRule . index.php [L] 
+
+RewriteRule .* - [env=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

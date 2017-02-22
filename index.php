@@ -45,7 +45,45 @@ $container['db'] = function ($container) {
     return $pdo;
 };
 
+$app->add(new \Slim\Middleware\JwtAuthentication([
+    "path" => "/auth", /* or ["/api", "/admin"] */
+    "secret" => "mysecretkey",
+    "secure" => false
+]));
 
+// $app->add(function ($request, $response, $next) {
+    
+//     $response->getBody()->write('APPLICATION Middleware BEFORE - 1 <hr/>');
+//         $response = $next($request, $response);
+//         $response->getBody()->write('<hr/> APPLICATION Middleware AFTER - 1');
+
+//         return $response;
+
+    
+// });
+
+// $app->add(function ($request, $response, $next) {
+//     $response->getBody()->write('APPLICATION Middleware BEFORE - 2 <hr/>');
+//     $response = $next($request, $response);
+//     $response->getBody()->write('<hr/> APPLICATION Middleware AFTER - 2');
+
+//     return $response;
+// });
+
+
+// $now = new DateTime();
+// $future = new DateTime("now +2 hours");
+// $jti = Base62::encode(random_bytes(16));
+
+// $secret = "your_secret_key";
+
+// $payload = [
+//     "jti" => $jti,
+//     "iat" => $now->getTimeStamp(),
+//     "nbf" => $future->getTimeStamp()
+// ];
+
+// $token = JWT::encode($payload, $secret, "HS256");
 
 /** 
 ==========================================
@@ -80,6 +118,28 @@ $app->group('/api', function() {
 
 });
 
+$app->group('/auth', function() { 
+
+            $this->post('/', function(Request $request, Response $response) {
+                // Check and validate token
+
+                print_r( $decoded = $request->getAttribute("token"));
+
+                // if not validated return unauthorized
+
+                // token is validated
+
+                // process request
+
+                // return response
+                exit('Protected routes');
+            });
+            
+
+    
+
+});
+
 
 $app->get('/hello/{name}/', function (Request $request, Response $response) {
     $name = $request->getAttribute('name');
@@ -95,7 +155,14 @@ $app->get('/', function ($request, $response, $args) {
 
 $app->get('/docs/', function(Request $request, Response $response) {
     echo '<h3>This docs is for testing Slim Framework API</h3>';
+    echo $request->getAttribute('foo');
     echo "<pre>";   
+
+    print_r ($request->getHeaders()); // ALL HEADERS
+    echo '<br/>';
+
+    print ('Host: ' . $request->getHeader('Host')[0]); // GET 1 HEADER
+    echo '<br/><br/>';
 
     print_r ($request->getUri());
     echo '<br/>';
@@ -112,7 +179,16 @@ $app->get('/docs/', function(Request $request, Response $response) {
     print_r ($request->getQueryParam('age', null));
     echo '<br/>';
 
+    echo "</pre>";
+
     return '';
+})->add(function ($request, $response, $next) {
+    $response->getBody()->write('ROUTE SPECIFIC Middleware BEFORE <hr/>');
+    $request = $request->withAttribute('foo', 'bar');
+    $response = $next($request, $response);
+    $response->getBody()->write('<hr/> ROUTE SPECIFIC Middleware AFTER');
+
+    return $response;
 });
 
 $app->get('/slim-pdo/', function (Request $request, Response $response) {
@@ -137,31 +213,48 @@ $app->get('/slim-pdo/', function (Request $request, Response $response) {
 });
 
 
+$app->group('/utils', function () use ($app) {
 
-$app->group('/tickets', function(){
-
-    $this->get('/fdaczczc', function(Request $request, Response $response){
-        $this->logger->addInfo("Ticket list");
-        $mapper = new TicketMapper($this->db);
-        $tickets = $mapper->index();
-        return $response->withJson($tickets);
+    $app->get('/', function ($request, $response) {
+        return $response->getBody()->write(date('Y-m-d H:i:s'));
     });
 
-    $this->get('/', function(Request $request, Response $response){
+    $app->get('/date', function ($request, $response) {
+        return $response->getBody()->write(date('Y-m-d H:i:s'));
+    });
+    $app->get('/time', function ($request, $response) {
+        return $response->getBody()->write(time());
+    });
+})->add(function ($request, $response, $next) {
+    $response->getBody()->write('It is now ');
+    $response = $next($request, $response);
+    $response->getBody()->write('. Enjoy!');
+
+    return $response;
+});
+
+
+$app->group('/tickets', function() use ($app) {
+
+    $app->get('/', function(Request $request, Response $response){
         $this->logger->addInfo("Ticket list");
         $mapper = new TicketMapper($this->db);
         $tickets = $mapper->index($request);
         return $response->withJson($tickets);
     });
 
+    $app->get('/testroute/', function(Request $request, Response $response){
+        return $response->getBody()->write('Enjoy!');
+    });
+
     // Add a new ticket
-    $this->post('/', function ($request, $response) {
+    $app->post('/', function ($request, $response) {
        $input = $request->getParsedBody();
        echo $input['name'];
     });
     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
 
-    $this->get('/{id}/', function(Request $request, Response $response){
+    $app->get('/{id}/', function(Request $request, Response $response){
         $this->logger->addInfo("Ticket Info");
         $mapper = new TicketMapper($this->db);
         $ticket = $mapper->show($request->getAttribute('id'));
@@ -169,7 +262,7 @@ $app->group('/tickets', function(){
     });
 
     // DELETE a todo with given id
-    $this->delete('/{id}/', function ($request, $response, $args) {
+    $app->delete('/{id}/', function ($request, $response, $args) {
         $sth = $this->db->prepare("DELETE FROM tickets WHERE id=:id");
         $sth->bindParam("id", $args['id']);
         $sth->execute();
@@ -178,7 +271,7 @@ $app->group('/tickets', function(){
     });
     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
     // Update todo with given id
-    $this->put('/{id}/', function ($request, $response, $args) {
+    $app->put('/{id}/', function ($request, $response, $args) {
         $input = $request->getParsedBody();
         $sql = "UPDATE tickets SET name=:name WHERE id=:id";
         $sth = $this->db->prepare($sql);

@@ -71,7 +71,8 @@ class TicketMapper {
 	        $selectStatement->whereLike('name', "$name%");
 	    }
 
-	    $selectStatement->limit(1,0);
+	    // LIMIT:
+	    // $selectStatement->limit(1,0);
 
 	    $stmt = $selectStatement->execute();
 	    $tickets = $stmt->fetchAll();
