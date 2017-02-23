@@ -4,6 +4,7 @@
         "monolog/monolog": "^1.22",
         "slim/pdo": "~1.9",
         "tuupola/slim-jwt-auth": "^2.3",
-        "tuupola/slim-basic-auth": "^2.2"
+        "tuupola/slim-basic-auth": "^2.2",
+        "firebase/php-jwt": "^4.0"
     }
 }

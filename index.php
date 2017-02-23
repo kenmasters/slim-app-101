@@ -1,10 +1,11 @@
 <?php
-use \Slim\Middleware\JwtAuthentication as JwtAuth;
-use Slim\Middleware\HttpBasicAuthentication as HttpBasicAuth;
+require 'vendor/autoload.php';
+
 use \Psr\Http\Message\ServerRequestInterface as Request;
 use \Psr\Http\Message\ResponseInterface as Response;
-
-require 'vendor/autoload.php';
+use \Slim\Middleware\JwtAuthentication as JwtAuth;
+use Slim\Middleware\HttpBasicAuthentication as HttpBasicAuth;
+use \Firebase\JWT\JWT;
 
 // date_default_timezone_set('America/Chicago'); // Set timezone
 date_default_timezone_set('Asia/Manila'); // Set timezone
@@ -24,12 +25,12 @@ $container["jwt"] = function ($container) {
 };
 
 
-// $container['logger'] = function($container) {
-//     $logger = new \Monolog\Logger('my_logger');
-//     $file_handler = new \Monolog\Handler\StreamHandler("logs/app.log");
-//     $logger->pushHandler($file_handler);
-//     return $logger;
-// };
+$container['logger'] = function($container) {
+    $logger = new \Monolog\Logger('my_logger');
+    $file_handler = new \Monolog\Handler\StreamHandler("logs/app.log");
+    $logger->pushHandler($file_handler);
+    return $logger;
+};
 
 // This connection is using default PHP PDO
 // $container['DB'] = function ($container) {
@@ -56,24 +57,22 @@ $container["jwt"] = function ($container) {
 
 $app->add(new JwtAuth([
     // "algorithm" => ["HS256", "HS384"],
-    "path" => "/api/", // or ["/api", "/admin"] 
-    "passthrough" => ["/api/token/", "/admin/ping"],
+    "path" => "/api/v1/", // or ["/api", "/admin"] 
+    // "passthrough" => ["/api/token/", "/admin/ping"],
     "secret" => "mysecretkey",
     "secure" => false,
     "callback" => function ($request, $response, $arguments) {
         // this callback is called when authentication succeeds
-        $container["jwt"] = $arguments["decoded"];
-        // $data = [];
-        // $data["status"] = "error";
-        // $data["message"] = $arguments["message"];
-        // return $response->write(json_encode($data, JSON_UNESCAPED_SLASHES));
+        $data = [];
+        $data["test"] = 'Yahahaha';
+        return $response->withJson($data);
     },
     "error" => function ($request, $response, $arguments) {
         // this callback is called when authentication fails
         $data = [];
         $data["status"] = "error";
         $data["message"] = $arguments["message"];
-        $data["test"] = 'HEY';
+        $data["test"] = 'Nope';
         return $response->write(json_encode($data, JSON_UNESCAPED_SLASHES));
     }
 ]));
@@ -149,16 +148,55 @@ APPLICATION ROUTE/ENDPOINTS
 // API Main ROUTES/ENDPOINTS
 $app->group('/api', function() use ($app) {
 
+
+    // AUTHENTICATION / ENTRY POINT
     $app->post("/token/", function (Request $request, Response $response) {
       /* Here generate and return JWT to the client. */
-      $response->withJson([
-            'token' => 'sampletoken',
-            'foo' => $request->getAttribute('foo')
-        ]);
 
-      return $response;
+        // $now = new DateTime();
+        // $future = new DateTime("now +2 hours");
+        // $server = $request->getServerParams();
+
+        // $payload = [
+        //     "iat" => $now->getTimeStamp(),
+        //     "exp" => $future->getTimeStamp(),
+        //     "sub" => $server["PHP_AUTH_USER"],
+        // ];
+
+        // $secret = "mysecretkey";
+        // $token = JWT::encode($payload, $secret, "HS256");
+        // $data["status"] = "ok";
+        // $data["token"] = $token;
+
+
+        $key = "mysecretkey";
+        $token = array(
+            "iss" => "http://slimapp101.dev/",
+            "aud" => "http://slimapp101.dev/",
+            "iat" => 1356999524,
+            "nbf" => 1357000000
+        );
+
+        /**
+         * IMPORTANT:
+         * You must specify supported algorithms for your application. See
+         * https://tools.ietf.org/html/draft-ietf-jose-json-web-algorithms-40
+         * for a list of spec-compliant algorithms.
+         */
+        $jwt = JWT::encode($token, $key);
+        $decoded = JWT::decode($jwt, $key, array('HS256'));
+
+        $data = [];
+        $data['jwt'] = $jwt;
+        $data['decoded'] = $decoded;
+
+          return $response->withStatus(201)
+              ->withHeader("Content-Type", "application/json")
+              ->withJson($data);
     });
 
+
+    // PROTECED RESOURES
     $app->group('/v1', function() use ($app) {
 
         $app->group('/users', function() use ($app) {
@@ -224,10 +262,10 @@ $app->group('/api', function() use ($app) {
 //     return $response;
 // });
 
-// $app->get('/', function ($request, $response, $args) {
-// 	$this->logger->addInfo("Welcome! May Slim be with you.");
-//     return $response->write("<h1><pre>Silence is a woman's best garment. (anonymous)</pre></h1>");
-// });
+$app->get('/', function ($request, $response, $args) {
+	$this->logger->addInfo("Welcome! May Slim be with you.");
+    return $response->write("<h1><pre>Silence is a woman's best garment. (anonymous)</pre></h1>");
+});
 
 
 // $app->get('/docs/', function(Request $request, Response $response) {
