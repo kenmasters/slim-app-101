@@ -1,4 +1,6 @@
 <?php
+use \Slim\Middleware\JwtAuthentication as JwtAuth;
+use Slim\Middleware\HttpBasicAuthentication as HttpBasicAuth;
 use \Psr\Http\Message\ServerRequestInterface as Request;
 use \Psr\Http\Message\ResponseInterface as Response;
 
@@ -7,49 +9,99 @@ require 'vendor/autoload.php';
 // date_default_timezone_set('America/Chicago'); // Set timezone
 date_default_timezone_set('Asia/Manila'); // Set timezone
 
-spl_autoload_register(function ($classname) {
-    require ("classes/" . $classname . ".php");
-});
+// spl_autoload_register(function ($classname) {
+//     require ("classes/" . $classname . ".php");
+// });
 
 $config = require 'config.php';
 $app = new Slim\App($config);
 $container = $app->getContainer();
 
-
  /* DEPENDENCY INJECTION */
-$container['logger'] = function($container) {
-    $logger = new \Monolog\Logger('my_logger');
-    $file_handler = new \Monolog\Handler\StreamHandler("logs/app.log");
-    $logger->pushHandler($file_handler);
-    return $logger;
+
+$container["jwt"] = function ($container) {
+    return new StdClass;
 };
+
+
+// $container['logger'] = function($container) {
+//     $logger = new \Monolog\Logger('my_logger');
+//     $file_handler = new \Monolog\Handler\StreamHandler("logs/app.log");
+//     $logger->pushHandler($file_handler);
+//     return $logger;
+// };
 
 // This connection is using default PHP PDO
-$container['DB'] = function ($container) {
-    $db = $container['settings']['db'];
-    $pdo = new PDO("mysql:host=" . $db['host'] . ";dbname=" . $db['dbname'], $db['user'], $db['pass']);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, FALSE);
-    return $pdo;
-};
+// $container['DB'] = function ($container) {
+//     $db = $container['settings']['db'];
+//     $pdo = new PDO("mysql:host=" . $db['host'] . ";dbname=" . $db['dbname'], $db['user'], $db['pass']);
+//     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+//     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+//     $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, FALSE);
+//     return $pdo;
+// };
 
 // This connection is using Slim/PDO package
-$container['db'] = function ($container) {
-    $db = $container['settings']['db'];
-    $dsn = "mysql:host={$db['host']};dbname={$db['dbname']};charset=utf8";
-    $usr = $db['user'];
-    $pwd = $db['pass'];
-    $pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
-    $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, TRUE);
-    return $pdo;
-};
+// $container['db'] = function ($container) {
+//     $db = $container['settings']['db'];
+//     $dsn = "mysql:host={$db['host']};dbname={$db['dbname']};charset=utf8";
+//     $usr = $db['user'];
+//     $pwd = $db['pass'];
+//     $pdo = new \Slim\PDO\Database($dsn, $usr, $pwd);
+//     $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, TRUE);
+//     return $pdo;
+// };
 
-$app->add(new \Slim\Middleware\JwtAuthentication([
-    "path" => "/auth", /* or ["/api", "/admin"] */
+
+
+$app->add(new JwtAuth([
+    // "algorithm" => ["HS256", "HS384"],
+    "path" => "/api/", // or ["/api", "/admin"] 
+    "passthrough" => ["/api/token/", "/admin/ping"],
     "secret" => "mysecretkey",
-    "secure" => false
+    "secure" => false,
+    "callback" => function ($request, $response, $arguments) {
+        // this callback is called when authentication succeeds
+        $container["jwt"] = $arguments["decoded"];
+        // $data = [];
+        // $data["status"] = "error";
+        // $data["message"] = $arguments["message"];
+        // return $response->write(json_encode($data, JSON_UNESCAPED_SLASHES));
+    },
+    "error" => function ($request, $response, $arguments) {
+        // this callback is called when authentication fails
+        $data = [];
+        $data["status"] = "error";
+        $data["message"] = $arguments["message"];
+        $data["test"] = 'HEY';
+        return $response->write(json_encode($data, JSON_UNESCAPED_SLASHES));
+    }
 ]));
+
+$app->add(new HttpBasicAuth([
+    "path" => "/api/token/",
+    "secure" => false,
+    "users" => [
+        "root" => "t00r",
+    ],
+    "callback" => function ($request, $response, $arguments) {
+        $data = [];
+        $data["status"] = "error";
+        $data["message"] = $arguments["message"];
+        return $response->write(json_encode($data, JSON_UNESCAPED_SLASHES));
+
+    },
+    "error" => function ($request, $response, $arguments) {
+        // this callback is called when authentication fails
+        $data = [];
+        $data["status"] = "error";
+        $data["message"] = $arguments["message"];
+        return $response->write(json_encode($data, JSON_UNESCAPED_SLASHES));
+    }
+]));
+
+
+
 
 // $app->add(function ($request, $response, $next) {
     
@@ -91,25 +143,47 @@ APPLICATION ROUTE/ENDPOINTS
 ==========================================
 */
 
+
+
+
 // API Main ROUTES/ENDPOINTS
-$app->group('/api', function() {
+$app->group('/api', function() use ($app) {
 
-    $this->group('/v1', function() {
+    $app->post("/token/", function (Request $request, Response $response) {
+      /* Here generate and return JWT to the client. */
+      $response->withJson([
+            'token' => 'sampletoken',
+            'foo' => $request->getAttribute('foo')
+        ]);
 
-        $this->group('/users', function() {
-            $this->get('/', function(Request $request, Response $response) {
+      return $response;
+    });
+
+    $app->group('/v1', function() use ($app) {
+
+        $app->group('/users', function() use ($app) {
+            $app->get('/', function(Request $request, Response $response) {
                 exit('User routes');
             });
-            $this->get('/{id}/', function(Request $request, Response $response) {
+            $app->get('/{id}/', function(Request $request, Response $response) {
                 exit('User of id: ' . $request->getAttribute('id'));
+            });
+            $app->delete("/{id}", function ($request, $response, $arguments) {
+                if (in_array("delete", $this->jwt->scope)) {
+                    /* Code for deleting item */
+                    return $response->withStatus(200);
+                } else {
+                    /* No scope so respond with 401 Unauthorized */
+                    return $response->withStatus(401);
+                }
             });
         });
 
-        $this->group('/events', function() {
-            $this->get('/', function(Request $request, Response $response) {
+        $app->group('/events', function() use ($app) {
+            $app->get('/', function(Request $request, Response $response) {
                 exit('Events routes');
             });
-            $this->get('/{id}/', function(Request $request, Response $response) {
+            $app->get('/{id}/', function(Request $request, Response $response) {
                 exit('Event of id: ' . $request->getAttribute('id'));
             });
         });
@@ -118,171 +192,174 @@ $app->group('/api', function() {
 
 });
 
-$app->group('/auth', function() { 
 
-            $this->post('/', function(Request $request, Response $response) {
-                // Check and validate token
 
-                print_r( $decoded = $request->getAttribute("token"));
 
-                // if not validated return unauthorized
+// $app->group('/auth', function() { 
 
-                // token is validated
+//             $this->post('/', function(Request $request, Response $response) {
+//                 // Check and validate token
 
-                // process request
+//                 print_r( $decoded = $request->getAttribute("token"));
 
-                // return response
-                exit('Protected routes');
-            });
+//                 // if not validated return unauthorized
+
+//                 // token is validated
+
+//                 // process request
+
+//                 // return response
+//                 exit('Protected routes');
+//             });
             
 
     
 
-});
+// });
 
 
-$app->get('/hello/{name}/', function (Request $request, Response $response) {
-    $name = $request->getAttribute('name');
-    $response->getBody()->write("Hello, $name");
-    return $response;
-});
+// $app->get('/hello/{name}/', function (Request $request, Response $response) {
+//     $name = $request->getAttribute('name');
+//     $response->getBody()->write("Hello, $name");
+//     return $response;
+// });
 
-$app->get('/', function ($request, $response, $args) {
-	$this->logger->addInfo("Welcome! May Slim be with you.");
-    return $response->write("<h1><pre>Silence is a woman's best garment. (anonymous)</pre></h1>");
-});
+// $app->get('/', function ($request, $response, $args) {
+// 	$this->logger->addInfo("Welcome! May Slim be with you.");
+//     return $response->write("<h1><pre>Silence is a woman's best garment. (anonymous)</pre></h1>");
+// });
 
 
-$app->get('/docs/', function(Request $request, Response $response) {
-    echo '<h3>This docs is for testing Slim Framework API</h3>';
-    echo $request->getAttribute('foo');
-    echo "<pre>";   
+// $app->get('/docs/', function(Request $request, Response $response) {
+//     echo '<h3>This docs is for testing Slim Framework API</h3>';
+//     echo $request->getAttribute('foo');
+//     echo "<pre>";   
 
-    print_r ($request->getHeaders()); // ALL HEADERS
-    echo '<br/>';
+//     print_r ($request->getHeaders()); // ALL HEADERS
+//     echo '<br/>';
 
-    print ('Host: ' . $request->getHeader('Host')[0]); // GET 1 HEADER
-    echo '<br/><br/>';
+//     print ('Host: ' . $request->getHeader('Host')[0]); // GET 1 HEADER
+//     echo '<br/><br/>';
 
-    print_r ($request->getUri());
-    echo '<br/>';
+//     print_r ($request->getUri());
+//     echo '<br/>';
 
-    print_r ($request->getMethod());
-    echo '<br/>';
+//     print_r ($request->getMethod());
+//     echo '<br/>';
 
-    print_r ($request->getUri()->getQuery());
-    echo '<br/>';
+//     print_r ($request->getUri()->getQuery());
+//     echo '<br/>';
 
-    print_r ($request->getQueryParams());
-    echo '<br/>';
+//     print_r ($request->getQueryParams());
+//     echo '<br/>';
 
-    print_r ($request->getQueryParam('age', null));
-    echo '<br/>';
+//     print_r ($request->getQueryParam('age', null));
+//     echo '<br/>';
 
-    echo "</pre>";
+//     echo "</pre>";
 
-    return '';
-})->add(function ($request, $response, $next) {
-    $response->getBody()->write('ROUTE SPECIFIC Middleware BEFORE <hr/>');
-    $request = $request->withAttribute('foo', 'bar');
-    $response = $next($request, $response);
-    $response->getBody()->write('<hr/> ROUTE SPECIFIC Middleware AFTER');
+//     return '';
+// })->add(function ($request, $response, $next) {
+//     $response->getBody()->write('ROUTE SPECIFIC Middleware BEFORE <hr/>');
+//     $request = $request->withAttribute('foo', 'bar');
+//     $response = $next($request, $response);
+//     $response->getBody()->write('<hr/> ROUTE SPECIFIC Middleware AFTER');
 
-    return $response;
-});
+//     return $response;
+// });
 
-$app->get('/slim-pdo/', function (Request $request, Response $response) {
+// $app->get('/slim-pdo/', function (Request $request, Response $response) {
    
-    $selectStatement = $this->DB->select()->from('tickets');
+//     $selectStatement = $this->DB->select()->from('tickets');
 
-    $id = $request->getQueryParam('id');
-    $name = $request->getQueryParam('name');
+//     $id = $request->getQueryParam('id');
+//     $name = $request->getQueryParam('name');
     
 
-    if( $id ) {
-        $selectStatement->where('id', '=', $id);
-    }
+//     if( $id ) {
+//         $selectStatement->where('id', '=', $id);
+//     }
 
-    if( $name ) {
-        $selectStatement->whereLike('name', "$name%");
-    }
+//     if( $name ) {
+//         $selectStatement->whereLike('name', "$name%");
+//     }
 
-    $stmt = $selectStatement->execute();
-    $data = $stmt->fetchAll();
-    return $response->withJson($data);
-});
-
-
-$app->group('/utils', function () use ($app) {
-
-    $app->get('/', function ($request, $response) {
-        return $response->getBody()->write(date('Y-m-d H:i:s'));
-    });
-
-    $app->get('/date', function ($request, $response) {
-        return $response->getBody()->write(date('Y-m-d H:i:s'));
-    });
-    $app->get('/time', function ($request, $response) {
-        return $response->getBody()->write(time());
-    });
-})->add(function ($request, $response, $next) {
-    $response->getBody()->write('It is now ');
-    $response = $next($request, $response);
-    $response->getBody()->write('. Enjoy!');
-
-    return $response;
-});
+//     $stmt = $selectStatement->execute();
+//     $data = $stmt->fetchAll();
+//     return $response->withJson($data);
+// });
 
 
-$app->group('/tickets', function() use ($app) {
+// $app->group('/utils', function () use ($app) {
 
-    $app->get('/', function(Request $request, Response $response){
-        $this->logger->addInfo("Ticket list");
-        $mapper = new TicketMapper($this->db);
-        $tickets = $mapper->index($request);
-        return $response->withJson($tickets);
-    });
+//     $app->get('/', function ($request, $response) {
+//         return $response->getBody()->write(date('Y-m-d H:i:s'));
+//     });
 
-    $app->get('/testroute/', function(Request $request, Response $response){
-        return $response->getBody()->write('Enjoy!');
-    });
+//     $app->get('/date', function ($request, $response) {
+//         return $response->getBody()->write(date('Y-m-d H:i:s'));
+//     });
+//     $app->get('/time', function ($request, $response) {
+//         return $response->getBody()->write(time());
+//     });
+// })->add(function ($request, $response, $next) {
+//     $response->getBody()->write('It is now ');
+//     $response = $next($request, $response);
+//     $response->getBody()->write('. Enjoy!');
 
-    // Add a new ticket
-    $app->post('/', function ($request, $response) {
-       $input = $request->getParsedBody();
-       echo $input['name'];
-    });
-    // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
+//     return $response;
+// });
 
-    $app->get('/{id}/', function(Request $request, Response $response){
-        $this->logger->addInfo("Ticket Info");
-        $mapper = new TicketMapper($this->db);
-        $ticket = $mapper->show($request->getAttribute('id'));
-        return $response->withJson($ticket);
-    });
 
-    // DELETE a todo with given id
-    $app->delete('/{id}/', function ($request, $response, $args) {
-        $sth = $this->db->prepare("DELETE FROM tickets WHERE id=:id");
-        $sth->bindParam("id", $args['id']);
-        $sth->execute();
-        $todos = $sth->rowCount();
-        return $response->withJson($todos);
-    });
-    // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
-    // Update todo with given id
-    $app->put('/{id}/', function ($request, $response, $args) {
-        $input = $request->getParsedBody();
-        $sql = "UPDATE tickets SET name=:name WHERE id=:id";
-        $sth = $this->db->prepare($sql);
-        $sth->bindParam("id", $args['id']);
-        $sth->bindParam("name", $input['name']);
-        $sth->execute();
-        $input['id'] = $args['id'];
-        return $response->withJson($input);
-    });
-    // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
-});
+// $app->group('/tickets', function() use ($app) {
+
+//     $app->get('/', function(Request $request, Response $response){
+//         $this->logger->addInfo("Ticket list");
+//         $mapper = new TicketMapper($this->db);
+//         $tickets = $mapper->index($request);
+//         return $response->withJson($tickets);
+//     });
+
+//     $app->get('/testroute/', function(Request $request, Response $response){
+//         return $response->getBody()->write('Enjoy!');
+//     });
+
+//     // Add a new ticket
+//     $app->post('/', function ($request, $response) {
+//        $input = $request->getParsedBody();
+//        echo $input['name'];
+//     });
+//     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
+
+//     $app->get('/{id}/', function(Request $request, Response $response){
+//         $this->logger->addInfo("Ticket Info");
+//         $mapper = new TicketMapper($this->db);
+//         $ticket = $mapper->show($request->getAttribute('id'));
+//         return $response->withJson($ticket);
+//     });
+
+//     // DELETE a todo with given id
+//     $app->delete('/{id}/', function ($request, $response, $args) {
+//         $sth = $this->db->prepare("DELETE FROM tickets WHERE id=:id");
+//         $sth->bindParam("id", $args['id']);
+//         $sth->execute();
+//         $todos = $sth->rowCount();
+//         return $response->withJson($todos);
+//     });
+//     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
+//     // Update todo with given id
+//     $app->put('/{id}/', function ($request, $response, $args) {
+//         $input = $request->getParsedBody();
+//         $sql = "UPDATE tickets SET name=:name WHERE id=:id";
+//         $sth = $this->db->prepare($sql);
+//         $sth->bindParam("id", $args['id']);
+//         $sth->bindParam("name", $input['name']);
+//         $sth->execute();
+//         $input['id'] = $args['id'];
+//         return $response->withJson($input);
+//     });
+//     // - See more at: https://arjunphp.com/creating-restful-api-slim-framework/#sthash.Dyxd4GPx.dpuf
+// });
 
 
 
