@@ -4,7 +4,7 @@ require 'vendor/autoload.php';
 use \Psr\Http\Message\ServerRequestInterface as Request;
 use \Psr\Http\Message\ResponseInterface as Response;
 use \Slim\Middleware\JwtAuthentication as JwtAuth;
-use Slim\Middleware\HttpBasicAuthentication as HttpBasicAuth;
+use \Slim\Middleware\HttpBasicAuthentication as HttpBasicAuth;
 use \Firebase\JWT\JWT;
 
 // date_default_timezone_set('America/Chicago'); // Set timezone
@@ -30,6 +30,30 @@ $container['logger'] = function($container) {
     $file_handler = new \Monolog\Handler\StreamHandler("logs/app.log");
     $logger->pushHandler($file_handler);
     return $logger;
+};
+
+$container['view'] = function($container) {
+    $view = new Jenssegers\Blade\Blade(
+        __DIR__.'/resources/views',
+        __DIR__.'/resources/cache'
+    );
+
+    return $view;
+};
+
+$container['params'] = function($container) {
+    return [];
+};
+
+// REGISTER/BIND APPLICATION CONTROLLERS
+
+// Home Controller
+$container['HomeController'] = function($container) {
+    return new App\Controllers\HomeController($container);
+};
+
+$container['RestController'] = function($container) use ($app) {
+    return new App\Controllers\RestController($app);
 };
 
 // This connection is using default PHP PDO
@@ -99,7 +123,14 @@ $app->add(new HttpBasicAuth([
     }
 ]));
 
+// This will show our login form.
+$app->get('/login/', function(Request $request, Response $response) {
+    return $this->view->render('login');
+});
 
+// User endpoint bind to controller
+$app->get('/home/', 'HomeController:index');
+$app->any('/rest/', 'RestController');
 
 
 // $app->add(function ($request, $response, $next) {
@@ -142,7 +173,26 @@ APPLICATION ROUTE/ENDPOINTS
 ==========================================
 */
 
+// Authentication Endpoint
+// $app->get('/login/', function(Request $request, Response $response) {
+//     // This will show our login form to let user login
+//     return $response->write("<pre><h1>Login Form</h1></pre>");
+// });
 
+$app->post('/authenticate/', function(Request $request, Response $response) {
+    // process passed information
+    // generate token for current user to have access over protected endpoints
+    // returns json with token and current user data
+
+    // for testing lets write to the browser.
+    return $response->write("<pre><h1>Successfully logged in.</h1></pre>");
+});
+
+
+// Logout current user
+$app->post('/logout/', function(Request $request, Response $response) {
+    return $response->write("<pre><h1>Successfully logged out.</h1></pre>");
+});
 
 
 // API Main ROUTES/ENDPOINTS

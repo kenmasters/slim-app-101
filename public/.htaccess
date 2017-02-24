@@ -1,0 +1,15 @@
+RewriteEngine on
+
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+
+# To enforce a no-trailing-slash policy
+# RewriteRule ^(.+?)/$ /$1 [L,R=301]
+
+# To enforce a trailing-slash policy:
+RewriteRule ^(.*[^/])$ /$1/ [R=301,L]
+
+# To redirect all request to index.php
+RewriteRule . index.php [L] 
+
+RewriteRule .* - [env=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
