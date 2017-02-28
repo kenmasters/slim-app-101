@@ -6,7 +6,8 @@
         "tuupola/slim-jwt-auth": "^2.3",
         "tuupola/slim-basic-auth": "^2.2",
         "firebase/php-jwt": "^4.0",
-        "jenssegers/blade": "^1.1"
+        "jenssegers/blade": "^1.1",
+        "vlucas/phpdotenv": "^2.4"
     },
     "autoload": {
     	"psr-4": {

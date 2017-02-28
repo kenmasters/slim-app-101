@@ -7,18 +7,18 @@ use \Slim\Middleware\JwtAuthentication as JwtAuth;
 use \Slim\Middleware\HttpBasicAuthentication as HttpBasicAuth;
 use \Firebase\JWT\JWT;
 
-// date_default_timezone_set('America/Chicago'); // Set timezone
-date_default_timezone_set('Asia/Manila'); // Set timezone
+// Set timezone
+date_default_timezone_set('Asia/Manila');
 
-// spl_autoload_register(function ($classname) {
-//     require ("classes/" . $classname . ".php");
-// });
+$dotenv = new Dotenv\Dotenv(__DIR__);
+$dotenv->load();
 
 $config = require 'config.php';
+
 $app = new Slim\App($config);
 $container = $app->getContainer();
 
- /* DEPENDENCY INJECTION */
+/* DEPENDENCY INJECTION */
 
 $container["jwt"] = function ($container) {
     return new StdClass;
@@ -48,13 +48,8 @@ $container['params'] = function($container) {
 // REGISTER/BIND APPLICATION CONTROLLERS
 
 // Home Controller
-$container['HomeController'] = function($container) {
-    return new App\Controllers\HomeController($container);
-};
-
-$container['RestController'] = function($container) use ($app) {
-    return new App\Controllers\RestController($app);
-};
+// $container['HomeController'] = new App\Controllers\HomeController($container);
+$container['RestController'] = new App\Controllers\RestController($container);
 
 // This connection is using default PHP PDO
 // $container['DB'] = function ($container) {
@@ -130,7 +125,9 @@ $app->get('/login/', function(Request $request, Response $response) {
 
 // User endpoint bind to controller
 $app->get('/home/', 'HomeController:index');
-$app->any('/rest/', 'RestController');
+$app->get('/rest/', 'RestController');
+// $app->get('/rest/', 'RestController:index');
+// $app->get('/rest/{id}/', 'RestController:show');
 
 
 // $app->add(function ($request, $response, $next) {
